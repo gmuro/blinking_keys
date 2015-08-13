@@ -43,7 +43,7 @@
  ** @{ */
 /** \addtogroup Examples CIAA Firmware Examples
  ** @{ */
-/** \addtogroup Blinking Blinking_echo example source file
+/** \addtogroup Blinking Keys example source file (for EDU-CIAA)
  ** @{ */
 
 /*
@@ -59,11 +59,7 @@
 /*
  * modification history (new versions first)
  * -----------------------------------------------------------
- * 20150603 v0.0.3   ErPe change uint8 type by uint8_t
- *                        in line 172
- * 20141019 v0.0.2   JuCe add printf in each task,
- *                        remove trailing spaces
- * 20140731 v0.0.1   PR   first functional version
+ * 20150812 v0.0.1   GMuro   first functional version
  */
 
 /*==================[inclusions]=============================================*/
@@ -74,6 +70,10 @@
 #include "blinking_keys.h"    /* <= own header */
 
 /*==================[macros and definitions]=================================*/
+#define TEC1_MASK         0B0001
+#define TEC2_MASK         0B0010
+#define TEC3_MASK         0B0100
+#define TEC4_MASK         0B1000
 
 /*==================[internal data declaration]==============================*/
 
@@ -86,6 +86,16 @@
  * Device path /dev/dio/out/0
  */
 static int32_t fd_out;
+
+/** \brief File descriptor for digital inputs ports
+ *
+ * Device path /dev/dio/in/0
+ */
+static int32_t fd_in;
+
+static uint8_t ledMask = 1;
+
+static uint16_t blinkingPeriod = 250;
 
 /*==================[external data definition]===============================*/
 
@@ -152,11 +162,14 @@ TASK(InitTask)
    /* open CIAA digital outputs */
    fd_out = ciaaPOSIX_open("/dev/dio/out/0", O_RDWR);
 
+   /* open CIAA digital inputs */
+   fd_in = ciaaPOSIX_open("/dev/dio/in/0", O_RDWR);
+
    /* activate periodic task:
     *  - for the first time after 350 ticks (350 ms)
     *  - and then every 250 ticks (250 ms)
     */
-   SetRelAlarm(ActivatePeriodicTask, 350, 250);
+   SetRelAlarm(ActivatePeriodicTask, 0, blinkingPeriod);
 
    /* terminate task */
    TerminateTask();
@@ -177,8 +190,69 @@ TASK(PeriodicTask)
 
    /* blink output */
    ciaaPOSIX_read(fd_out, &outputs, 1);
-   outputs ^= 0x20;
+   outputs = (ledMask ^ outputs) & ledMask;
    ciaaPOSIX_write(fd_out, &outputs, 1);
+
+   /* terminate task */
+   TerminateTask();
+}
+
+/** \brief Keys Task
+ *
+ * This task is started automatically every time that the alarm
+ * ActivateKeysTask expires.
+ *
+ */
+TASK(KeysTask)
+{
+   static uint8_t stateKeys;
+   uint8_t inputs;
+   uint8_t edgeUpKeys;
+
+   /* read input keys */
+   ciaaPOSIX_read(fd_in, &inputs, 1);
+
+   /* detects edges*/
+   edgeUpKeys = (inputs ^ stateKeys) & inputs;
+
+   /* save new state of keys */
+   stateKeys = inputs;
+
+   /* TEC1: rotate mask to right */
+   if (TEC1_MASK & edgeUpKeys)
+   {
+      ledMask = ledMask>>1;
+      if (0 == ledMask)
+      {
+         ledMask = 0b00100000;
+      }
+   }
+
+   /* TEC2: rotate mask to left */
+   if (TEC2_MASK & edgeUpKeys)
+   {
+      ledMask = ledMask<<1;
+      if (0b01000000 & ledMask)
+      {
+         ledMask = 1;
+      }
+   }
+
+   /* TEC3: decrease period */
+   if ( (TEC3_MASK & edgeUpKeys) && (50 < blinkingPeriod) )
+   {
+      blinkingPeriod -= 50;
+      CancelAlarm(ActivatePeriodicTask);
+      SetRelAlarm(ActivatePeriodicTask, blinkingPeriod, blinkingPeriod);
+   }
+
+   /* TEC3: increment period */
+   if ( (TEC4_MASK & edgeUpKeys) && (1000 > blinkingPeriod) )
+   {
+      blinkingPeriod += 50;
+      CancelAlarm(ActivatePeriodicTask);
+      SetRelAlarm(ActivatePeriodicTask, blinkingPeriod, blinkingPeriod);
+   }
 
    /* terminate task */
    TerminateTask();

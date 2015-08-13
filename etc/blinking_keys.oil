@@ -82,6 +82,16 @@ OSEK OSEK {
       RESOURCE = POSIXR;
       EVENT = POSIXE;
    }
+   
+   TASK KeysTask {
+      PRIORITY = 1;
+      ACTIVATION = 1;
+      STACK = 512;
+      TYPE = EXTENDED;
+      SCHEDULE = NON;
+      RESOURCE = POSIXR;
+      EVENT = POSIXE;
+   }
 
    ALARM ActivatePeriodicTask {
       COUNTER = HardwareCounter;
@@ -90,6 +100,18 @@ OSEK OSEK {
       }
    }
 
+   ALARM ActivateKeysTask {
+      COUNTER = HardwareCounter;
+      ACTION = ACTIVATETASK {
+         TASK = KeysTask;
+      };
+      AUTOSTART = TRUE {
+         APPMODE = AppMode1;
+         ALARMTIME = 50;
+         CYCLETIME = 50;
+      };
+   };
+   
    COUNTER HardwareCounter {
       MAXALLOWEDVALUE = 1000;
       TICKSPERBASE = 1;
@@ -97,5 +119,22 @@ OSEK OSEK {
       TYPE = HARDWARE;
       COUNTER = HWCOUNTER0;
    };
-
+   
+   ISR UART0_IRQHandler {
+      INTERRUPT = UART0;
+      CATEGORY = 2;
+      PRIORITY = 0;
+   };
+   
+   ISR UART2_IRQHandler {
+      INTERRUPT = UART2;
+      CATEGORY = 2;
+      PRIORITY = 0;
+   };
+   
+   ISR UART3_IRQHandler {
+      INTERRUPT = UART3;
+      CATEGORY = 2;
+      PRIORITY = 0;
+   };
 };
